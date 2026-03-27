@@ -116,6 +116,7 @@ def preview():
                 with console.status("[magenta]loading dataset preview...[/magenta]", spinner="aesthetic"):
 
                     if i == data["index"]:
+                        
                         if data["source"] == "Hugging Face":
 
                             try:
@@ -139,7 +140,12 @@ def preview():
                                 else:
                                     console.print(Panel(f"[magenta] Cannot Preview: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
                                     break
-                            df = pd.DataFrame(list(dataset_hugging.take(10)))
+                            
+                            try:
+                                df = pd.DataFrame(list(dataset_hugging.take(10)))
+                            except Exception as e:
+                                console.print(Panel(f"[magenta] Cannot preview: {str(e)[:100]} 【 unsupported or compressed file 】[/magenta]", border_style="bold red", box=box.DOUBLE))
+                                break
 
 
                             table = Table(
