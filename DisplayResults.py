@@ -10,9 +10,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import Prompt
 from rich import box
-import kagglehub
-from kagglehub import KaggleDatasetAdapter
-
+import pandas as pd
+from huggingface_hub import snapshot_download
 
 
 datasets.logging.disable_progress_bar()
@@ -25,7 +24,7 @@ console = Console()
 
 scores, query = scoring()
 
-
+##Displays the dataset in a table format 
 def display_result():
     top_thirty = []
     
@@ -73,16 +72,18 @@ def display_result():
     return top_thirty
 
 
+
+##Previewing the Datasets 
 def preview():
 
     dataset = display_result()
+    skip_preview = False
 
-    heads_data = []
 
     time.sleep(3)
 
     console.print(Panel(
-        "[magenta]PREVIEW WHAT YOU LIKE [/magenta]",
+        "[magenta]PREVIEW WHAT YOU LIKE OR SKIP PV BY TYPING 'skip' [/magenta]",
         border_style="magenta",
         subtitle="[pink1]Enter Like This(Enter SN For Preview: 1, 2, 3, ...)[/pink1]"
     ))
@@ -93,97 +94,167 @@ def preview():
             time.sleep(1.5)
 
         user_choice = Prompt.ask("\n [bold magenta]Enter SN For Preview: [/bold magenta]")
-        try:
-            indexes = [int(x.strip()) for x in user_choice.split(",")]
-            if any(i<1 or i>len(dataset) for i in indexes):
-                raise ValueError
-            
+
+        if user_choice == "skip":
+            skip_preview = True
             break
-            
-        except:
-            console.print(Panel("[magenta] Error! Invalid Input. Try Again! [/magenta]", border_style="bold red", box=box.DOUBLE))
+        else:
+            try:
+                indexes = [int(x.strip()) for x in user_choice.split(",")]
+                if any(i<1 or i>len(dataset) for i in indexes):
+                    raise ValueError
+                
+                break
+                
+            except:
+                console.print(Panel("[magenta] Error! Invalid Input. Try Again! [/magenta]", border_style="bold red", box=box.DOUBLE))
+
+    if not skip_preview:
+
+        for i in indexes:
+            for data in dataset:
+                with console.status("[magenta]loading dataset preview...[/magenta]", spinner="aesthetic"):
+
+                    if i == data["index"]:
+                        if data["source"] == "Hugging Face":
+
+                            try:
+                                dataset_hugging =  load_dataset(data["name"], split="train", streaming=True, token=hf_api_key)
+
+                            except Exception as e:
+
+                                error = str(e)
+
+                                if "Config name is missing" in error:
+                                    configs = re.findall(r"'(\w+)'", error)
+
+                                    if configs:
+
+                                        try:
+                                            dataset_hugging = load_dataset(data["name"], configs[0], split="train", streaming=True, token=hf_api_key)
+                                        except:
+                                            console.print(Panel(f"[magenta] Cannot Preview [/magenta]", border_style="bold red", box=box.DOUBLE))
+                                            break
+
+                                else:
+                                    console.print(Panel(f"[magenta] Cannot Preview: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
+                                    break
+                            df = pd.DataFrame(list(dataset_hugging.take(10)))
 
 
-    for i in indexes:
-        for data in dataset:
-            with console.status("[magenta]loading dataset preview...[/magenta]", spinner="aesthetic"):
+                            table = Table(
+                                title = f"「 Preview 」 {data['name']} | First 10 rows of HF Dataset",
+                                box = box.DOUBLE_EDGE,
+                                border_style= "cyan",
+                                header_style= "bold bright_cyan",
+                                show_lines=True
+                            )
 
-                if i == data["index"]:
-                    if data["source"] == "Hugging Face":
+                            for col in df.columns:
+                                table.add_column(f"【{col}】", style= "white", overflow="fold")
+                            
+                            for _, row in df.iterrows():
+                                table.add_row(*[str(val)[:50] + "..." if len(str(val)) > 50 else str(val) for val in row])
+                            
+                            console.print(table)
 
-                        try:
-                            dataset_hugging =  load_dataset(data["name"], split="train")
-
-                        except Exception as e:
-
-                            error = str(e)
-
-                            if "Config name is missing" in error:
-                                configs = re.findall(r"'(\w+)'", error)
-
-                                if configs:
-
-                                    try:
-                                        dataset_hugging = load_dataset(data["name"], configs[0], split="train")
-                                    except:
-                                        console.print(Panel(f"[magenta] Cannot Preview [/magenta]", border_style="bold red", box=box.DOUBLE))
-                                        break
-
-                            else:
+                        elif data["source"] == "Kaggle":
+                            try:
+                                files = api.dataset_list_files(data["name"]).files
+                            except Exception as e:
                                 console.print(Panel(f"[magenta] Cannot Preview: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
                                 break
-                        df = dataset_hugging.to_pandas().head(10)
 
-                        table = Table(
-                            title = f"「 Preview 」 {data['name']} | {len(dataset_hugging)} total rows",
-                            box = box.DOUBLE_EDGE,
-                            border_style= "cyan",
-                            header_style= "bold bright_cyan",
-                            show_lines=True
+                            table = Table(
+                                title=f"「 Files 」 {data['name']}",
+                                box=box.DOUBLE_EDGE,
+                                border_style="cyan",
+                                header_style="bold bright_cyan",
+                                show_lines=True
+                            )
+
+                            table.add_column("【 FILE 】", style="white")
+                            table.add_column("【 SIZE 】", style="magenta", justify="right")
+
+                            for f in files:
+                                size = f"{f.total_bytes / 1024:.1f} KB" if f.total_bytes < 1_000_000 else f"{f.total_bytes / 1_000_000:.1f} MB"
+                                table.add_row(f.name, size)
+
+                            console.print(table)
+                            
+                        break
+
+    return dataset
+
+
+def download_datasets():
+    dataset = preview()
+
+    console.print(Panel(
+        "[magenta]DOWNLOAD WHAT YOU LIKE OR SKIP DOWNLOAD BY TYPING 'skip' [/magenta]",
+        border_style="magenta",
+        subtitle="[pink1]Enter Like This(Enter SN For Preview: 1, 2, 3, ...)[/pink1]"
+    ))
+
+    
+    while True:
+        download_numbers = Prompt.ask("\n[magenta] Enter SN of Datasets You Want To Download: [/magenta]")
+
+        try:
+            numbers = [int(num.strip()) for num in download_numbers.split(",")]
+            if any(i<1 or i>len(dataset) for i in numbers):
+                raise ValueError
+                    
+            break
+                    
+        except:
+            console.print(Panel("[magenta] Error! Invalid Input. Try Again! [/magenta]", border_style="bold red", box=box.DOUBLE))
+            continue
+
+    for n in numbers:
+        for data in dataset:
+            if n == data["index"]:
+                if data["source"] == "Hugging Face":
+
+                    try:
+
+                        path = snapshot_download(
+                            repo_id= data["name"],
+                            repo_type= "dataset",
+                            token= hf_api_key,
+                            local_dir="Downloads"
                         )
 
-                        for col in df.columns:
-                            table.add_column(f"【{col}】", style= "white", overflow="fold")
-                        
-                        for _, row in df.iterrows():
-                            table.add_row(*[str(val)[:50] + "..." if len(str(val)) > 50 else str(val) for val in row])
-                        
-                        console.print(table)
+                        console.print(Panel(
+                            f"[magenta]DOWNLOADED {data['name']} TO {path}[/magenta]",
+                            border_style="magenta"
+                        ))
+                    except Exception as e:
+                        console.print(Panel(f"[magenta] Download Failed: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
 
-                    elif data["source"] == "Kaggle":
-                        try:
-                            files = api.dataset_list_files(data["name"]).files
-                        except Exception as e:
-                            console.print(Panel(f"[magenta] Cannot Preview: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
-                            break
+                elif data["source"] == "Kaggle":
 
-                        table = Table(
-                            title=f"「 Files 」 {data['name']}",
-                            box=box.DOUBLE_EDGE,
-                            border_style="cyan",
-                            header_style="bold bright_cyan",
-                            show_lines=True
+                    try:
+                        api.dataset_download_files(
+                            data["name"],
+                            path="Downloads",
+                            unzip=True
                         )
-
-                        table.add_column("【 FILE 】", style="white")
-                        table.add_column("【 SIZE 】", style="magenta", justify="right")
-
-                        for f in files:
-                            size = f"{f.total_bytes / 1024:.1f} KB" if f.total_bytes < 1_000_000 else f"{f.total_bytes / 1_000_000:.1f} MB"
-                            table.add_row(f.name, size)
-
-                        console.print(table)
-
-                        
+                        console.print(Panel(
+                                f"[magenta]DOWNLOADED {data['name']} TO Downloads[/magenta]",
+                                border_style="magenta"
+                            ))
+                    except Exception as e:
+                        console.print(Panel(f"[magenta] Download Failed: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
+                
+                break
 
 
 
 
 
-            
 
 
 
 
-
-preview()
+download_datasets()
