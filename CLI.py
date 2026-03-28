@@ -29,6 +29,7 @@ ai = Groq(
 console = Console()
 
 
+
 class search():
 
     def startup_screen(self):
@@ -181,7 +182,8 @@ def scoring():
                     "downloads_score": score_downloads(hugs.downloads),
                     "likes_score": score_likes(hugs.likes),
                     "recent_score": score_recency((datetime.now(timezone.utc) - hugs.last_modified).days),
-                    "size_socre": next((score_size_hf(t) for t in hugs.tags if t.startswith("size_categories:")), 1)
+                    "size_socre": next((score_size_hf(t) for t in hugs.tags if t.startswith("size_categories:")), 1),
+                    "real_size": next((t.split(":")[1] for t in hugs.tags if t.startswith("size_categories:")), "Unknown"),
 
                 }
             )
@@ -195,7 +197,9 @@ def scoring():
                     "downloads_score": score_downloads(kag.download_count),
                     "likes_score": score_likes(kag.vote_count),
                     "recent_score": score_recency((datetime.now(timezone.utc) - kag.last_updated.replace(tzinfo=timezone.utc)).days),
-                    "size_socre": score_size_kaggle(kag.total_bytes)
+                    "size_socre": score_size_kaggle(kag.total_bytes),
+                    "real_size": f"{kag.total_bytes / 1024:.1f} KB" if kag.total_bytes < 1_000_000 else f"{kag.total_bytes / 1_000_000:.1f} MB"
+
                 }
             )
 
@@ -204,11 +208,17 @@ def scoring():
                 {
                     "name": score["name"],
                     "score": final_score_calc(score["downloads_score"], score["likes_score"], score["recent_score"], score["size_socre"], score["ai score"]),
-                    "from": score["from"]
+                    "from": score["from"],
+                    "size": score["real_size"],
+                    
+                    
                 }
                 )
             
         
+                    
+        
         score_result = sorted(final_score, key=lambda x: x["score"], reverse=True)
 
     return score_result, search_query
+

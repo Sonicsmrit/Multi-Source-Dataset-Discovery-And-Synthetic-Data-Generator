@@ -1,6 +1,8 @@
 import json, time, os, sys, re
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
 
 from CLI import *
 from datasets import load_dataset
@@ -45,6 +47,7 @@ def display_result():
     table.add_column("【 NAME 】", style="white")
     table.add_column("【 SCORE 】", style="bold yellow", justify="center")
     table.add_column("【 SOURCE 】", style="cyan", justify="center")
+    table.add_column("【 SIZE 】", style="cyan", justify="center")
 
     for i, dataset in enumerate(scores[:30], 1):
 
@@ -58,12 +61,16 @@ def display_result():
             f"[pink1]#{i}[/pink1]",
             dataset["name"],
             f"[{score_color}]{score:.2f}[/{score_color}]",
-            source
+            source,
+            str(dataset["size"])
+
+
         )
         top_thirty.append({
             "index": i,
             "name": dataset["name"],
-            "source": dataset["from"]
+            "source": dataset["from"],
+            "size": dataset["size"]
         })
 
     console.print(table)
@@ -143,8 +150,16 @@ def preview():
                             
                             try:
                                 df = pd.DataFrame(list(dataset_hugging.take(10)))
+
                             except Exception as e:
-                                console.print(Panel(f"[magenta] Cannot preview: {str(e)[:100]} 【 unsupported or compressed file 】[/magenta]", border_style="bold red", box=box.DOUBLE))
+
+                                console.print(Panel(f"[magenta] Cannot preview {str(e)[:100]} 【 unsupported or compressed file 】[/magenta]", border_style="bold red", box=box.DOUBLE))
+                                console.print(Panel(
+                                    f"[magenta] Preview not available for this dataset type.\nVisit: https://huggingface.co/datasets/{data['name']} [/magenta]",
+                                    border_style="cyan",
+                                    box=box.DOUBLE
+                                ))
+
                                 break
 
 
@@ -192,9 +207,10 @@ def preview():
 
     return dataset
 
-
+###Downloads the datasets Kaggle downloads, HF tells the user to download it themselves 
 def download_datasets():
     dataset = preview()
+    skip = False
 
     console.print(Panel(
         "[magenta]DOWNLOAD WHAT YOU LIKE OR SKIP DOWNLOAD BY TYPING 'skip' [/magenta]",
@@ -202,65 +218,60 @@ def download_datasets():
         subtitle="[pink1]Enter Like This(Enter SN For Preview: 1, 2, 3, ...)[/pink1]"
     ))
 
-    
+    with console.status("[magenta]Setting up...[/magenta]", spinner="aesthetic"):
+        time.sleep(1.5)
+
     while True:
         download_numbers = Prompt.ask("\n[magenta] Enter SN of Datasets You Want To Download: [/magenta]")
-
-        try:
-            numbers = [int(num.strip()) for num in download_numbers.split(",")]
-            if any(i<1 or i>len(dataset) for i in numbers):
-                raise ValueError
-                    
+    
+        if download_numbers.lower() == "skip":
+            skip = True
             break
-                    
-        except:
-            console.print(Panel("[magenta] Error! Invalid Input. Try Again! [/magenta]", border_style="bold red", box=box.DOUBLE))
-            continue
+        else:
 
-    for n in numbers:
-        for data in dataset:
-            if n == data["index"]:
-                if data["source"] == "Hugging Face":
-
-                    try:
-
-                        path = snapshot_download(
-                            repo_id= data["name"],
-                            repo_type= "dataset",
-                            token= hf_api_key,
-                            local_dir="Downloads"
-                        )
-
-                        console.print(Panel(
-                            f"[magenta]DOWNLOADED {data['name']} TO {path}[/magenta]",
-                            border_style="magenta"
-                        ))
-                    except Exception as e:
-                        console.print(Panel(f"[magenta] Download Failed: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
-
-                elif data["source"] == "Kaggle":
-
-                    try:
-                        api.dataset_download_files(
-                            data["name"],
-                            path="Downloads",
-                            unzip=True
-                        )
-                        console.print(Panel(
-                                f"[magenta]DOWNLOADED {data['name']} TO Downloads[/magenta]",
-                                border_style="magenta"
-                            ))
-                    except Exception as e:
-                        console.print(Panel(f"[magenta] Download Failed: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
-                
+            try:
+                numbers = [int(num.strip()) for num in download_numbers.split(",")]
+                if any(i<1 or i>len(dataset) for i in numbers):
+                    raise ValueError
+                        
                 break
+                        
+            except:
+                console.print(Panel("[magenta] Error! Invalid Input. Try Again! [/magenta]", border_style="bold red", box=box.DOUBLE))
+                continue
+    
+    if not skip:
+        for n in numbers:
+            for data in dataset:
+                if n == data["index"]:
+                    if data["source"] == "Hugging Face":
+
+                        console.print(Panel(
+                            f"[magenta] Visit to Download & Preview:\n https://huggingface.co/datasets/{data['name']} \n Sorry For The Inconvenience[/magenta]",
+                            border_style="cyan",
+                            box=box.DOUBLE
+                        ))
+
+                    elif data["source"] == "Kaggle":
+
+                        try:
+                            with console.status(f"[magenta]Downloading {data['name']}...[/magenta]", spinner="aesthetic"):
+                                api.dataset_download_files(
+                                    data["name"],
+                                    path=f"Downloads/{data['name'].replace('/', '_')}",
+                                    unzip=True,
+                                    
+                                )
+                            console.print(Panel(
+                                    f"[magenta]DOWNLOADED {data['name']} TO Downloads[/magenta]",
+                                    border_style="magenta"
+                                ))
+                        except Exception as e:
+                            console.print(Panel(f"[magenta] Download Failed: {str(e)[:100]} [/magenta]", border_style="bold red", box=box.DOUBLE))
+                    
+                    break
 
 
 
 
 
-
-
-
-
-download_datasets()

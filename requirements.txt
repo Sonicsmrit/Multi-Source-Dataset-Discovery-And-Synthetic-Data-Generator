@@ -1,0 +1,9 @@
+pandas
+python-dotenv
+rich
+pyfiglet
+kaggle
+huggingface-hub
+datasets
+groq
+sdv

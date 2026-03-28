@@ -1,2 +1,6 @@
 .env
 Downloads/
+__pycache__/
+Cleaned/
+Synthetic/
+data.json
