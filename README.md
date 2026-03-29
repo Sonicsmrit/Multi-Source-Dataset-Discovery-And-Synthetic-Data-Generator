@@ -172,7 +172,9 @@ The pipeline runs in three sequential stages. Each stage is interactive and prom
 ### Stage 1 — Search & Download
 
 ```
-🔍︎ Search Datasets: credit card fraud detection
+<img width="1858" height="582" alt="image" src="https://github.com/user-attachments/assets/935c4a66-6f04-4de3-93ac-35dc69a21bae" />
+<img width="1327" height="844" alt="image" src="https://github.com/user-attachments/assets/ecc1bf00-ca71-424d-b5ea-7d0335fa2250" />
+
 ```
 
 The tool searches both Hugging Face and Kaggle, scores all results with AI, and presents a ranked table of up to 30 datasets. You can then:
